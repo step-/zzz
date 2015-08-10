@@ -1,0 +1,21 @@
+#!/bin/sh
+#20150809
+
+ver='2.3.6'
+
+curdir=$PWD
+targetdir=$curdir/scons-${ver}-python-p"$(date +%Y%m%d)"
+mkdir $targetdir
+
+wget -c http://prdownloads.sourceforge.net/scons/scons-${ver}.tar.gz
+tar zxf scons-${ver}.tar.gz
+cd scons-${ver}
+python setup.py install --prefix=${targetdir}/usr
+
+cd ..
+
+dir=${targetdir##*/}
+tar -zcf ${dir}.tar.gz ${dir}
+rm -rf $dir
+
+### END ###

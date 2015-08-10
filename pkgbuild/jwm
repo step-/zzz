@@ -1,0 +1,24 @@
+#!/bin/sh
+#20150809
+
+[ -f /etc/DISTRO_SPECS ] && . /etc/DISTRO_SPECS && distro="-${DISTRO_COMPAT_VERSION}"
+
+curdir=$PWD
+targetdir=$curdir/jwm-$(date +%Y%m%d)-git-$(uname -m)${distro}
+
+mkdir jwm-git
+cd jwm-git
+
+git clone -b master --depth 1 https://github.com/joewing/jwm.git
+cd jwm
+
+autoreconf -vi
+./configure --prefix=${targetdir}/usr && make && make install
+
+strip --strip-unneeded ${targetdir}/usr/bin/jwm
+mv ${targetdir} ${targetdir}
+
+#cd $curdir
+#rm -rf jwm-git
+
+### END ###

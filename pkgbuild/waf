@@ -1,0 +1,21 @@
+#!/bin/sh
+
+ver=1.8.12
+curdir=$PWD
+
+mkdir -p waf-${ver}/usr/bin
+cd waf-${ver}/usr/bin
+
+wget https://waf.io/waf-${ver}
+mv waf-${ver} waf
+chmod +x waf
+
+cd $curdir
+
+newdir=waf-${ver}-python-p"$(date +%Y%m%d)"
+mv waf-${ver} $newdir
+
+tar -zcf ${newdir}.tar.gz $newdir
+rm -rf $newdir
+
+### END ###

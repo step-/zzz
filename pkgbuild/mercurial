@@ -1,0 +1,27 @@
+#!/bin/sh
+#20150809
+
+ver='3.5'
+
+[ -f /etc/DISTRO_SPECS ] && . /etc/DISTRO_SPECS && distro="-${DISTRO_COMPAT_VERSION}"
+
+curdir=$PWD
+targetdir=$curdir/mercurial-${ver}-python${distro}-p"$(date +%Y%m%d)"
+mkdir $targetdir
+
+wget -c http://mercurial.selenic.com/release/mercurial-${ver}.tar.gz
+tar zxf mercurial-${ver}.tar.gz
+cd mercurial-${ver}
+sed -i "s|^PREFIX=.*|PREFIX=${targetdir}/usr|" Makefile
+sed -i 's|$(MAKE) -C doc||' Makefile
+sed -i 's|cd doc.*||' Makefile
+make
+make install
+
+cd ..
+
+dir=${targetdir##*/}
+tar -zcf ${dir}.tar.gz ${dir}
+rm -rf $dir
+
+### END ###
