@@ -7,8 +7,8 @@
 
 build=mpv #ffmpeg mpv spek aegisub
 
-ffmpeg=1
-mpv=0
+ffmpeg=2 #0:disable 1:configure&build-all 2:build-changes
+mpv=0 #0:disable 1:configure&build-all 2:build-changes
 spek=0
 aegisub=0
 
@@ -27,7 +27,7 @@ echo "============================"
 
 scriptdir=${0%/*}
 scriptfile=${0##*/}
-	
+
 case $scriptdir in
 	 .*)  DIR=${PWD}       ;;
 	 /*)  DIR=${scriptdir} ;;
@@ -40,11 +40,7 @@ export ROOTDIR="$DIR"
 export BUILDDIR="$DIR/build"
 export SOURCEDIR="$DIR/sources"
 
-mkdir -p "$BUILDDIR"
-mkdir -p "$BUILDDIR/bin"
-mkdir -p "$BUILDDIR/lib"
-mkdir -p "$BUILDDIR/lib/pkgconfig"
-mkdir -p "$BUILDDIR/include"
+mkdir -p "$BUILDDIR/bin" "$BUILDDIR/lib/pkgconfig" "$BUILDDIR/include"
 mkdir -p "$SOURCEDIR"
 
 ####################################################################################
@@ -60,7 +56,7 @@ function EXECENV() {
 		eval $@
 }
 
-function StandardBuil() {
+function StandardBuild() {
 	./configure --prefix="$BUILDDIR" --disable-shared --enable-static && make && make install
 }
 
@@ -143,7 +139,7 @@ if [ ! -f "$BUILDDIR/lib/libfribidi.a" ] ; then #libass
 	${wget} http://fribidi.org/download/fribidi-0.19.7.tar.bz2 
 	tar jxf fribidi-0.19.7.tar.bz2 ; cd fribidi-0.19.7
 	./configure --prefix="$BUILDDIR" --disable-shared --enable-static && make && make install
-fi	
+fi
 if [ ! -f "$BUILDDIR/lib/libass.a" ] ; then #ffmpeg, mpv, aegisub	
 	cd ${SOURCEDIR}
 	${wget} https://github.com/libass/libass/releases/download/0.12.3/libass-0.12.3.tar.gz
@@ -166,7 +162,6 @@ fi
 ################################################################################
 
 if [ "$build" = "ffmpeg"  ] ; then
-
 	if [ ! -f "$BUILDDIR/lib/libx264.a" ] ; then #ffmpeg
 		cd ${SOURCEDIR}
 		${wget} http://download.videolan.org/pub/x264/snapshots/last_x264.tar.bz2
@@ -303,7 +298,7 @@ fi
 #########################################################################################
 
 if [ "$build" = "mpv"  ] ; then
-	
+
 	if [ ! -f "$BUILDDIR/lib/libcddb.a" ] ; then #libcdio
 		cd ${SOURCEDIR}
 		${wget} http://prdownloads.sourceforge.net/libcddb/libcddb-1.3.2.tar.bz2
@@ -411,12 +406,27 @@ if ls "${BUILDDIR}/lib/"*.la >/dev/null 2>&1; then
   sed -i "s|^prefix=.*|libdir=${BUILDDIR}/lib|" ${BUILDDIR}/lib/*.la #fix damaged lines, if any
 fi
 
+# Naive dependency checker - it tests for $1-bin to be newer than ALL libs *.a
+# A more accurate check would entail checking bin just against the
+# true dependency libs, like make does.  Nevertheless, need_rebuild
+# still saves us build time when all we're doing is adding/updating a
+# couple of libs. By setting ffmpeg=2 / mpv=2 and using need_rebuild
+# further down we don't end up reconfiguring and recompiling ffmpeg/mpv
+# completely; we just relink them.
+need_rebuild () { # $1-target-path
+  [ ! -e "$1" ] && return 0
+  local latest
+  latest=$(ls -t "$1" "${BUILDDIR}/lib/"*.a 2>/dev/null | head -1)
+  [ "$(basename "$1")" != "$(basename "${latest}")" ]
+}
+
 #####################################################################################
 
-if [ "$ffmpeg" -eq 1 ] && [ ! -f "$SOURCEDIR/ffmpeg/ffmpeg" ] ; then
-	
+if [ "$ffmpeg" -ne 0 ] && need_rebuild "$SOURCEDIR/ffmpeg/ffmpeg"; then
+  rm -f "$SOURCEDIR/ffmpeg/ffmpeg"
+
 	cd ${SOURCEDIR}
-	
+
 	if [ ! -d ffmpeg ] ; then
 		git clone -b master --depth 1 git://source.ffmpeg.org/ffmpeg.git
 		tar -zcf ffmpeg-$(date +%Y%m%d-%H%M%S).tar.gz ffmpeg
@@ -433,14 +443,14 @@ if [ "$ffmpeg" -eq 1 ] && [ ! -f "$SOURCEDIR/ffmpeg/ffmpeg" ] ; then
 	xlib='--disable-xlib --disable-x11grab'
 	doc='--disable-doc --disable-manpages'
 	staticlib='--disable-shared --enable-static'
-	
+
 	licenses='--enable-gpl --enable-version3 --enable-nonfree'
-	
+
 	basic='--enable-libass --enable-libfreetype'
 	basicav='--enable-libfdk-aac --enable-libx264 --enable-libmp3lame --enable-libxvid'
 	extraaudio='--enable-libvorbis --enable-libspeex --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libwavpack --enable-libopus'
 	extravideo='--enable-libvpx --enable-libtheora --enable-libx265 --enable-libxvid'
-	
+
 	if [ ! "$ffpreset" ] ; then
 		ffpreset=mpv #limitedffmpeg mpv minimallibav
 	fi
@@ -468,9 +478,9 @@ if [ "$ffmpeg" -eq 1 ] && [ ! -f "$SOURCEDIR/ffmpeg/ffmpeg" ] ; then
 			extra2='--disable-network --disable-encoders --disable-muxers --disable-bsfs --disable-filters' 
 			;;
 	esac
-	
+
 	./configure --help >../../ffmpeg.help
-	
+
 	if [ -f config.h ] ; then
 		echo '-----------------------------------------'
 		echo "Remove [ $PWD/config.h ] to force reconfigure"
@@ -479,10 +489,11 @@ if [ "$ffmpeg" -eq 1 ] && [ ! -f "$SOURCEDIR/ffmpeg/ffmpeg" ] ; then
 	else
 		ffredir='&>../../ffmpeg.configure'
 	fi
-	
+
 	[ "$staticlib" ] && echo "--- Will build ffmpeg static libs" && echo
 
-	eval ${ffconfig} ./configure \
+  if [ ${ffmpeg} -lt 2 ]; then
+	  eval ${ffconfig} ./configure \
 		  --prefix="$BUILDDIR" ${xbc} ${xlib} ${doc} \
 		  --pkg-config-flags="--static" ${staticlib} \
 		  --extra-cflags="-I${BUILDDIR}/include" \
@@ -490,9 +501,9 @@ if [ "$ffmpeg" -eq 1 ] && [ ! -f "$SOURCEDIR/ffmpeg/ffmpeg" ] ; then
 		  --bindir="${BUILDDIR}/bin" \
 		  ${licenses} ${basic} ${basicav} ${extraaudio} ${extravideo} ${extra} ${extra2} ${ffredir}
 		[ $? -ne 0 ] && echo 'ERROR' && exit 1
-	
+  fi
 	make
-	[ $? -ne 0 ] && make
+	[ $? -ne 0 ] && make # Why making again on error ??
 	make install
 
 	ffmpegout="$DIR/output-ffmpeg"
@@ -539,6 +550,11 @@ fi
 ####################################################################################
 
 PATCH1 () {
+  # Proceed on Fatdog64 only (test for '_fatdog' in script name)
+  if [ "${0%%*_fatdog}" = "$0" ]; then
+    echo "Skip PATCH1 (not Fatdog64)" >&2
+    return 0
+  fi
   # Patch wsscript* for static libs
   # ref. 10.3.3 of https://waf.io/book/#_library_interaction_use
   echo "patching waf script (PATCH1)" >&2
@@ -568,15 +584,16 @@ PATCH1 () {
   return 1
 }
 
-if [ ${mpv} -eq 1 ] && [ ! -f "${SOURCEDIR}/mpv/build/mpv" ] ; then
+if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
+  rm -f "${SOURCEDIR}/mpv/build/mpv"
 
 	cd ${SOURCEDIR}
-	
+
 	if [ ! -d mpv ] ; then
 		git clone -b master --depth 1 https://github.com/mpv-player/mpv.git
 		tar -zcf mpv-$(date +%Y%m%d-%H%M%S).tar.gz mpv
 		cd mpv
-		#PATCH1 || { echo "failed patching waf script (PATCH1)" >&2; exit 1; }
+		PATCH1 || { echo "failed patching waf script (PATCH1)" >&2; exit 1; }
 
 	else
 		cd mpv
@@ -586,21 +603,23 @@ if [ ${mpv} -eq 1 ] && [ ! -f "${SOURCEDIR}/mpv/build/mpv" ] ; then
 	if which waf ; then waf='waf' ; fi
 	[ -f waf ] && waf='./waf'
 	${waf} --help &>../../mpv.help
-	
+
 	MPVDIR=${ROOTDIR}/output-mpv
 	mkdir -p "$MPVDIR"
-	
+
 	#mpvopt='--disable-cdda'
-	
-	${waf} configure --prefix="$MPVDIR" ${mpvopt} &>../../mpv.configure
-	${waf} clean
+
+  if [ "${mpv}" -lt 2 ]; then
+	  ${waf} configure --prefix="$MPVDIR" ${mpvopt} &>../../mpv.configure
+	  ${waf} clean
+  fi
 	${waf} build
 	if [ -f "${SOURCEDIR}/mpv/build/mpv" ] ; then
 		echo "OK. mpv compiled !"
 		strip --strip-unneeded ${SOURCEDIR}/mpv/build/mpv
 		${waf} install
 	fi
-	
+
 else
 	if [ "$mpv" ] ; then
 		echo '-----------------------------------------------'
