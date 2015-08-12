@@ -5,18 +5,25 @@
 #								config
 #####################################################################################
 
-build=mpv #ffmpeg mpv spek aegisub
+# One target at the time!
+# You can pass the target on the command line, i.e., ffmpeg_project.sh mpv
+# or change the default target below.
+build=${1:-ffmpeg} #ffmpeg mpv spek aegisub
 
-ffmpeg=2 #0:disable 1:configure&build-all 2:build-changes
-mpv=0 #0:disable 1:configure&build-all 2:build-changes
-spek=0
-aegisub=0
+# On FIRST build ffmpeg=2 and mpv=2 do run configure as well.
+# On subsequent builds 0, 1 or 2 work as follows:
+ffmpeg=2   #0:disable 1:configure&build-all 2:build-changes-only
+mpv=2      #0:disable 1:configure&build-all 2:build-changes-only
+spek=0     #0:disable 1:WIP
+aegisub=0  #0:disable 1:WIP
 
-case ${build} in
-	mpv) 	mpv=1 	  ; ffpreset=mpv    		;;
-	ffmpeg)	ffmpeg=1  ; ffpreset=ffmpeg 		;;
-	aegisub)aegisub=1 ; ffpreset=minimallibav	;;
-	spek)   spek=1    ; ffpreset=minimallibav	;;
+case ${build} in # This is why one target at the time.
+	mpv) 	   ffpreset=mpv    		;;
+	ffmpeg)	 ffpreset=ffmpeg 		;;
+	aegisub) ffpreset=minimallibav	;;
+	spek)    ffpreset=minimallibav	;;
+  *) echo "Error: unknown build target or multiple targets not allowed." >&2
+     exit 1
 esac
 
 echo "============================"
@@ -224,7 +231,8 @@ if [ "$build" = "ffmpeg"  ] ; then
 		cd ${SOURCEDIR}
 		${wget} http://downloads.xiph.org/releases/theora/libtheora-1.1.1.tar.bz2
 		tar -jxf libtheora-1.1.1.tar.bz2 ; cd libtheora-1.1.1
-		./configure --prefix="$BUILDDIR" --disable-shared --enable-static && make && make install
+    # --disable-examples otherwise example png2theora.c fails and so the does overall make
+		./configure --prefix="$BUILDDIR" --disable-shared --enable-static --disable-examples && make && make install
 	fi
 
 	if [ ! -f "$BUILDDIR/lib/libxvidcore.a" ] ; then #ffmpeg
@@ -294,7 +302,7 @@ if [ "$build" = "ffmpeg"  ] ; then
 fi
 
 #########################################################################################
-#										mpv
+#			mpv exclusive stuff
 #########################################################################################
 
 if [ "$build" = "mpv"  ] ; then
@@ -377,7 +385,7 @@ if [ "$build" = "mpv"  ] ; then
 fi
 
 #########################################################################################
-#										aegisub
+#			aegisub exclusive stuff
 #########################################################################################
 
 if [ "$build" = "aegisub"  ] ; then
@@ -422,8 +430,9 @@ need_rebuild () { # $1-target-path
 
 #####################################################################################
 
+if ! [ "${build##*ffmpeg}" = "${build}" ]; then #lazy indent
 if [ "$ffmpeg" -ne 0 ] && need_rebuild "$SOURCEDIR/ffmpeg/ffmpeg"; then
-  rm -f "$SOURCEDIR/ffmpeg/ffmpeg"
+	rm -f "$SOURCEDIR/ffmpeg/ffmpeg"
 
 	cd ${SOURCEDIR}
 
@@ -432,7 +441,7 @@ if [ "$ffmpeg" -ne 0 ] && need_rebuild "$SOURCEDIR/ffmpeg/ffmpeg"; then
 		tar -zcf ffmpeg-$(date +%Y%m%d-%H%M%S).tar.gz ffmpeg
 	else
 		echo '-------------------------------------------'
-		echo "Remove [ $PWD/ffmpeg ] to redownload latest git"
+		echo "To redownload latest git: rm '$PWD/ffmpeg'"
 		echo '-------------------------------------------'	
 	fi
 
@@ -483,7 +492,7 @@ if [ "$ffmpeg" -ne 0 ] && need_rebuild "$SOURCEDIR/ffmpeg/ffmpeg"; then
 
 	if [ -f config.h ] ; then
 		echo '-----------------------------------------'
-		echo "Remove [ $PWD/config.h ] to force reconfigure"
+		echo "To force reconfigure: rm '$PWD/config.h'"
 		echo '-----------------------------------------'
 		ffconfig='echo'
 	else
@@ -492,7 +501,7 @@ if [ "$ffmpeg" -ne 0 ] && need_rebuild "$SOURCEDIR/ffmpeg/ffmpeg"; then
 
 	[ "$staticlib" ] && echo "--- Will build ffmpeg static libs" && echo
 
-  if [ ${ffmpeg} -lt 2 ]; then
+	if [ ${ffmpeg} -lt 2 -o ! -e config.mak ]; then
 	  eval ${ffconfig} ./configure \
 		  --prefix="$BUILDDIR" ${xbc} ${xlib} ${doc} \
 		  --pkg-config-flags="--static" ${staticlib} \
@@ -501,49 +510,53 @@ if [ "$ffmpeg" -ne 0 ] && need_rebuild "$SOURCEDIR/ffmpeg/ffmpeg"; then
 		  --bindir="${BUILDDIR}/bin" \
 		  ${licenses} ${basic} ${basicav} ${extraaudio} ${extravideo} ${extra} ${extra2} ${ffredir}
 		[ $? -ne 0 ] && echo 'ERROR' && exit 1
-  fi
-	make
-	[ $? -ne 0 ] && make # Why making again on error ??
-	make install
+	fi
+#	make
+#	[ $? -ne 0 ] && make # Why making again on error ??
+#	make install
+  make && make install && {
+	  ffmpegout="$DIR/output-ffmpeg"
+	  mkdir -p "$ffmpegout"
+	  [ -f "$SOURCEDIR/ffmpeg/ffmpeg" ] && cp -v "$SOURCEDIR/ffmpeg/ffmpeg" "$ffmpegout"
+	  [ -f "$SOURCEDIR/ffmpeg/ffplay" ] && cp -v "$SOURCEDIR/ffmpeg/ffplay" "$ffmpegout"
+	  [ -f "$SOURCEDIR/ffmpeg/ffprobe" ] && cp -v "$SOURCEDIR/ffmpeg/ffprobe" "$ffmpegout"
+	  [ -f "$SOURCEDIR/ffmpeg/ffserver" ] && cp -v "$SOURCEDIR/ffmpeg/ffserver" "$ffmpegout"
 
-	ffmpegout="$DIR/output-ffmpeg"
-	mkdir "$ffmpegout"
-	[ -f "$SOURCEDIR/ffmpeg/ffmpeg" ] && cp "$SOURCEDIR/ffmpeg/ffmpeg" "$ffmpegout"
-	[ -f "$SOURCEDIR/ffmpeg/ffplay" ] && cp "$SOURCEDIR/ffmpeg/ffplay" "$ffmpegout"
-	[ -f "$SOURCEDIR/ffmpeg/ffprobe" ] && cp "$SOURCEDIR/ffmpeg/ffprobe" "$ffmpegout"
-	[ -f "$SOURCEDIR/ffmpeg/ffserver" ] && cp "$SOURCEDIR/ffmpeg/ffserver" "$ffmpegout"
-
-	#find "$SOURCEDIR/ffmpeg" -type f | grep -v "\.h$" | while read file ; do rm -rf $file ; done
-	#find "$SOURCEDIR/ffmpeg" -maxdepth 1 -type d | grep -v "^${SOURCEDIR}/ffmpeg$" | grep -v lib | while read dir ; do rm -rfv $dir ; done
-	#cp -rfv $SOURCEDIR/ffmpeg/* "${BUILDDIR}/include"
+	  #find "$SOURCEDIR/ffmpeg" -type f | grep -v "\.h$" | while read file ; do rm -rf $file ; done
+	  #find "$SOURCEDIR/ffmpeg" -maxdepth 1 -type d | grep -v "^${SOURCEDIR}/ffmpeg$" | grep -v lib | while read dir ; do rm -rfv $dir ; done
+	  #cp -rfv $SOURCEDIR/ffmpeg/* "${BUILDDIR}/include"
+  }
 
 else
 	if [ -f "$SOURCEDIR/ffmpeg/ffmpeg" ] ; then
 		echo '-----------------------------------------------'
-		echo "To force ffmpeg recompile, remove: ${SOURCEDIR}/ffmpeg/ffmpeg"
+		echo "To force ffmpeg recompile: rm '${SOURCEDIR}/ffmpeg/ffmpeg'"
 		echo '-----------------------------------------------'
 	fi
 fi
-
+fi #lazy indent
 
 ####################################################################################
 
-if [ ${spek} -eq 1 ] ; then
-	cd ${SOURCEDIR}
-	${wget} https://spek.googlecode.com/files/spek-0.8.2.tar.xz
-	tar Jxf spek-0.8.2.tar.xz ; cd spek-0.8.2
-	mkdir ${ROOTDIR}/output-spek
-	./configure --prefix=${ROOTDIR}/output-spek && make && make install
-	exit $?
+if ! [ "${build##*spek}" = "${build}" ]; then
+	if [ ${spek} -eq 1 ] ; then
+	  cd ${SOURCEDIR}
+	  ${wget} https://spek.googlecode.com/files/spek-0.8.2.tar.xz
+	  tar Jxf spek-0.8.2.tar.xz ; cd spek-0.8.2
+	  mkdir ${ROOTDIR}/output-spek
+	  ./configure --prefix=${ROOTDIR}/output-spek && make && make install
+	  exit $?
+	fi
 fi
 
 ####################################################################################
 
-if [ ${aegisub} -eq 1 ] ; then
-	echo -n
-	exit $?
+if ! [ "${build##*aegisub}" = "${build}" ]; then
+  if [ ${aegisub} -eq 1 ] ; then
+	  echo -n
+	  exit $?
+  fi
 fi
-
 
 ####################################################################################
 #									mpv
@@ -584,8 +597,9 @@ PATCH1 () {
   return 1
 }
 
+if ! [ "${build##*mpv}" = "${build}" ]; then #lazy indent
 if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
-  rm -f "${SOURCEDIR}/mpv/build/mpv"
+	rm -f "${SOURCEDIR}/mpv/build/mpv"
 
 	cd ${SOURCEDIR}
 
@@ -600,7 +614,7 @@ if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
 		#git pull --rebase --ff-only		
 	fi
 	./bootstrap.py
-	if which waf ; then waf='waf' ; fi
+	if which waf 2>/dev/null ; then waf='waf' ; fi
 	[ -f waf ] && waf='./waf'
 	${waf} --help &>../../mpv.help
 
@@ -609,10 +623,10 @@ if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
 
 	#mpvopt='--disable-cdda'
 
-  if [ "${mpv}" -lt 2 ]; then
+	if [ "${mpv}" -lt 2 -o ! -e build/config.h ]; then
 	  ${waf} configure --prefix="$MPVDIR" ${mpvopt} &>../../mpv.configure
 	  ${waf} clean
-  fi
+	fi
 	${waf} build
 	if [ -f "${SOURCEDIR}/mpv/build/mpv" ] ; then
 		echo "OK. mpv compiled !"
@@ -623,10 +637,11 @@ if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
 else
 	if [ "$mpv" ] ; then
 		echo '-----------------------------------------------'
-		echo "To force mpv recompile, remove: ${SOURCEDIR}/mpv/build/mpv"
+		echo "To force mpv recompile: rm '${SOURCEDIR}/mpv/build/mpv'"
 		echo '-----------------------------------------------'
 	fi
 fi
+fi #lazy indent
 
 cd ${ROOTDIR}
 
