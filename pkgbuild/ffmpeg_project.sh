@@ -631,6 +631,9 @@ if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
 	MPVDIR=${ROOTDIR}/output-mpv
 	mkdir -p "$MPVDIR"
 
+	#fix enca detection
+	sed -i "s|.*enca.h.*|        'func': check_pkg_config('enca'),|" wscript
+
 	#mpvopt='--disable-cdda'
 
 	if [ "${mpv}" -lt 2 -o ! -e build/config.h ]; then
