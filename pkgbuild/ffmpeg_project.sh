@@ -547,7 +547,8 @@ if ! [ "${build##*spek}" = "${build}" ]; then
 	  tar Jxf spek-0.8.2.tar.xz ; cd spek-0.8.2
 	  mkdir ${ROOTDIR}/output-spek
 	  ./configure --prefix=${ROOTDIR}/output-spek && make && make install
-	  exit $?
+	  strip --strip-unneeded ${ROOTDIR}/output-spek/bin/spek
+	  exit
 	fi
 fi
 
