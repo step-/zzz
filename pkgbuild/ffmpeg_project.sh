@@ -384,6 +384,13 @@ if [ "$build" = "mpv"  ] ; then
 	#	rm -v $BUILDDIR/lib/libuchardet.so*
 	#fi
 
+	if [ ! -f "$BUILDDIR/lib/liblcms2.a" ] ; then #requires: libtiff libjpeg zlib
+		cd ${SOURCEDIR} 
+		${wget} http://sourceforge.net/projects/lcms/files/lcms/2.7/lcms2-2.7.tar.gz #2015-03-18
+		tar zxf lcms2-2.7.tar.gz ; cd lcms2-2.7
+		./configure --prefix="$BUILDDIR" --disable-shared --enable-static && make && make install
+	fi
+
 fi
 
 #########################################################################################
