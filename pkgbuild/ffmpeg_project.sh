@@ -364,15 +364,17 @@ if [ "$build" = "mpv"  ] ; then
 		make clean && make && make install
 	fi
 
-	##linking problems
-	#if [ ! -f "$BUILDDIR/lib/libguess.a" ] ; then #mpv
-	#	cd ${SOURCEDIR}
-	#	git clone -b master --depth 1 https://github.com/kaniini/libguess.git
-	#	cd libguess 
-	#	./autogen.sh
-	#	./configure --prefix="$BUILDDIR" && make && make install
-	#	rm -v $BUILDDIR/lib/libguess.so*
-	#fi
+	if [ ! -f "$BUILDDIR/lib/libguess.a" ] ; then #mpv
+		cd ${SOURCEDIR}
+		git clone -b master --depth 1 https://github.com/kaniini/libguess.git
+		cd libguess 
+		./autogen.sh
+		./configure --prefix="$BUILDDIR" && make && make install
+		rm -v $BUILDDIR/lib/libguess.so*
+		cd src/libguess
+		ar rcs libguess.a *.o
+		cp -v libguess.a $BUILDDIR/lib
+	fi
 
 	##linking problems
 	#if [ ! -f "$BUILDDIR/lib/libuchardet.a" ] ; then #mpv
