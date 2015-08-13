@@ -364,15 +364,17 @@ if [ "$build" = "mpv"  ] ; then
 		make clean && make && make install
 	fi
 
-	##linking problems
-	#if [ ! -f "$BUILDDIR/lib/libguess.a" ] ; then #mpv
-	#	cd ${SOURCEDIR}
-	#	git clone -b master --depth 1 https://github.com/kaniini/libguess.git
-	#	cd libguess 
-	#	./autogen.sh
-	#	./configure --prefix="$BUILDDIR" && make && make install
-	#	rm -v $BUILDDIR/lib/libguess.so*
-	#fi
+	if [ ! -f "$BUILDDIR/lib/libguess.a" ] ; then #mpv
+		cd ${SOURCEDIR}
+		git clone -b master --depth 1 https://github.com/kaniini/libguess.git
+		cd libguess 
+		./autogen.sh
+		./configure --prefix="$BUILDDIR" && make && make install
+		rm -v $BUILDDIR/lib/libguess.so*
+		cd src/libguess
+		ar rcs libguess.a *.o
+		cp -v libguess.a $BUILDDIR/lib
+	fi
 
 	##linking problems
 	#if [ ! -f "$BUILDDIR/lib/libuchardet.a" ] ; then #mpv
@@ -381,6 +383,13 @@ if [ "$build" = "mpv"  ] ; then
 	#	cmake -DCMAKE_INSTALL_PREFIX="$BUILDDIR" . && make && make install
 	#	rm -v $BUILDDIR/lib/libuchardet.so*
 	#fi
+
+	if [ ! -f "$BUILDDIR/lib/liblcms2.a" ] ; then #requires: libtiff libjpeg zlib
+		cd ${SOURCEDIR} 
+		${wget} http://sourceforge.net/projects/lcms/files/lcms/2.7/lcms2-2.7.tar.gz #2015-03-18
+		tar zxf lcms2-2.7.tar.gz ; cd lcms2-2.7
+		./configure --prefix="$BUILDDIR" --disable-shared --enable-static && make && make install
+	fi
 
 fi
 
@@ -545,7 +554,8 @@ if ! [ "${build##*spek}" = "${build}" ]; then
 	  tar Jxf spek-0.8.2.tar.xz ; cd spek-0.8.2
 	  mkdir ${ROOTDIR}/output-spek
 	  ./configure --prefix=${ROOTDIR}/output-spek && make && make install
-	  exit $?
+	  strip --strip-unneeded ${ROOTDIR}/output-spek/bin/spek
+	  exit
 	fi
 fi
 
@@ -620,6 +630,9 @@ if [ ${mpv} -ne 0 ] && need_rebuild "${SOURCEDIR}/mpv/build/mpv"; then
 
 	MPVDIR=${ROOTDIR}/output-mpv
 	mkdir -p "$MPVDIR"
+
+	#fix enca detection
+	sed -i "s|.*enca.h.*|        'func': check_pkg_config('enca'),|" wscript
 
 	#mpvopt='--disable-cdda'
 
